@@ -13,8 +13,17 @@ class ByteStream
 protected:
   uint64_t capacity_;
   // Please add any additional state to the ByteStream here, and not to the Writer and Reader interfaces.
-
+  std::string s_data_;      // 记录stream数据的指针
+  uint64_t accumulate_pop;  // 累计的数值
+  uint64_t accumulate_push; // 累计的数值
+  int flag_;                // 标志状态
 public:
+  enum
+  {
+    FLAG_ERROR = -1,
+    FLAG_CLOSED = -2,
+    FLAG_OPEN = 0,
+  };
   explicit ByteStream( uint64_t capacity );
 
   // Helper functions (provided) to access the ByteStream's Reader and Writer interfaces
