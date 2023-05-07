@@ -3,9 +3,10 @@
 #include "byte_stream.hh"
 #include <algorithm>
 #include <list>
+#include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
-
 class Reassembler
 {
 
@@ -15,12 +16,19 @@ class Reassembler
     bool flag; // 0 invalid 1 valid 2 last_string
   };
 
+  struct pack_data
+  {
+    std::string data;
+    bool end;
+    pack_data() : data(), end( false ) {}
+    pack_data( const std::string d, bool e ) : data( d ), end( e ) {}
+  };
+
 protected:
   size_t target_byte_id = 0; // 记录当前期望的数据包id
-  std::vector<byte_node> cache_vec;
-  size_t end_byte_id = -1;
-  // std::list<sub_node> cache_list; // 存放没有reorder的数据包
-  // size_t cache_bytes = 0;
+  // std::vector<byte_node> cache_vec;
+  // size_t end_byte_id = -1;
+  std::map<size_t, pack_data> cache_umap;
 
 public:
   /*
@@ -43,7 +51,7 @@ public:
    *
    * The Reassembler should close the stream after writing the last byte.
    */
-  Reassembler() : target_byte_id( 0 ), cache_vec() {}
+  Reassembler() : target_byte_id( 0 ), cache_umap() {}
   ~Reassembler() {}
   void insert( uint64_t first_index, std::string data, bool is_last_substring, Writer& output );
 

@@ -4,55 +4,88 @@ using namespace std;
 
 void Reassembler::insert( uint64_t first_index, string data, bool is_last_substring, Writer& output )
 {
-  if ( is_last_substring ) {
-    end_byte_id = first_index + data.size();
+  size_t max_cache_size = output.available_capacity();
+  // 计算receiver windows[target_idx ,target_idx + max_cache_size]
+  if ( !( ( first_index + data.size() ) >= target_byte_id
+          && first_index <= ( target_byte_id + max_cache_size ) ) ) {
+    // 丢弃包
+    return;
   }
-  size_t free_internal_bytes = output.available_capacity();
-  cache_vec.resize( free_internal_bytes, byte_node { 0, 0 } );
-
-  // 计算接受数据的区间[target_idx,target_idx + free_internel_bytes]
-  // 实际数据的区间[first_index,first_index + data.size]
-  // 区间取交集-->result [a,b]
-  // printf( "insert [%ld,%ld]  cache[%ld ,%ld] \n",
-  //         first_index,
-  //         first_index + data.size(),
-  //         target_byte_id,
-  //         target_byte_id + free_internal_bytes );
-
-  int n = data.size();
-  for ( int i = 0; i < n; i++ ) {
-    size_t t = first_index + i;
-    if ( t >= target_byte_id && t < ( target_byte_id + free_internal_bytes ) ) {
-      // 写入cache中
-      // printf( "write cache idx = %ld \n", t - target_byte_id );
-      cache_vec[t - target_byte_id] = { data[i], 1 };
-    }
+  // 如果当前的数据包不满足windows条件，先减成满足条件的
+  // 清理后面的数据
+  int windows_end_idx = target_byte_id + max_cache_size;
+  int cur_end_idx = first_index + data.size();
+  int overlay = cur_end_idx - windows_end_idx;
+  if ( overlay > 0 ) {
+    data = data.substr( 0, data.size() - overlay );
   }
 
-  string str_out;
-  for ( size_t i = 0; i < free_internal_bytes; i++ ) {
-    if ( cache_vec[i].flag && ( target_byte_id + i ) <= end_byte_id ) {
-      str_out.push_back( cache_vec[i].ch );
-      cache_vec[i].flag = false;
-    } else {
+  overlay = target_byte_id - first_index;
+  if ( overlay > 0 ) {
+    data = data.substr( overlay, data.size() - overlay );
+    first_index += overlay;
+  }
+
+  // 已经缓存过了丢弃
+  if ( cache_umap.count( first_index ) == 1 && cache_umap[first_index].data.size() > data.size() ) {
+    return;
+  }
+
+  cache_umap[first_index] = { data, is_last_substring };
+
+  // printf( "before combine : \n" );
+  // for ( auto e : cache_umap ) {
+  //   printf( "idx = %ld data = %s \n", e.first, e.second.data.c_str() );
+  // }
+
+  auto it = cache_umap.begin();
+  // 合并不同的子区间
+  while ( true ) {
+    auto it_next = next( it );
+    if ( it_next == cache_umap.end() )
       break;
+
+    size_t idx = it->first;
+    pack_data& pkg = it->second;
+
+    overlay = idx + pkg.data.size() - it_next->first;
+    if ( overlay >= 0 ) {
+      pack_data& next_pkg = it_next->second;
+      if ( (size_t)overlay <= next_pkg.data.size() ) {
+        // 合并
+        pkg.data += next_pkg.data.substr( overlay, next_pkg.data.size() - overlay );
+        pkg.end |= next_pkg.end;
+      }
+
+      cache_umap.erase( it_next );
+      continue;
     }
+
+    it = it_next;
   }
-  output.push( str_out );
-  // 调整vec的内容
-  size_t outsize = str_out.size();
-  target_byte_id += outsize;
-  rotate( cache_vec.begin(), cache_vec.begin() + outsize, cache_vec.end() );
-  if ( target_byte_id == end_byte_id ) {
-    output.close();
+
+  // printf( "after combine : \n" );
+  // for ( auto e : cache_umap ) {
+  //   printf( "idx = %ld data = %s \n", e.first, e.second.data.c_str() );
+  // }
+
+  // 输出
+  if ( cache_umap.begin()->first == target_byte_id ) {
+    pack_data& pkg = cache_umap.begin()->second;
+    output.push( pkg.data );
+    target_byte_id += pkg.data.size();
+    if ( pkg.end ) {
+      output.close();
+    }
+    cache_umap.erase( cache_umap.begin() );
   }
 }
 
 uint64_t Reassembler::bytes_pending() const
 {
   uint64_t cache_bytes = 0;
-  for ( auto e : cache_vec ) {
-    cache_bytes += ( e.flag );
+  for ( auto e : cache_umap ) {
+    cache_bytes += e.second.data.size();
   }
   return cache_bytes;
 }
