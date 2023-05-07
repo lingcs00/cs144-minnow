@@ -30,6 +30,8 @@ macro(add_speed_test exec_name)
   add_dependencies(speed_testing "${exec_name}")
 endmacro(add_speed_test)
 
+
+add_test_exec(my_test)
 add_test_exec(byte_stream_basics)
 add_test_exec(byte_stream_capacity)
 add_test_exec(byte_stream_one_write)
@@ -37,4 +39,13 @@ add_test_exec(byte_stream_two_writes)
 add_test_exec(byte_stream_many_writes)
 add_test_exec(byte_stream_stress_test)
 
+add_test_exec(reassembler_single)
+add_test_exec(reassembler_cap)
+add_test_exec(reassembler_seq)
+add_test_exec(reassembler_dup)
+add_test_exec(reassembler_holes)
+add_test_exec(reassembler_overlapping)
+add_test_exec(reassembler_win)
+
 add_speed_test(byte_stream_speed_test)
+add_speed_test(reassembler_speed_test)
